@@ -127,7 +127,7 @@ const Shape = struct {
 };
 ```
 
-Which simplifies the usage significantly:
+This simplifies the usage significantly:
 
 ```zig
 const square = Square { .side = 2 };
@@ -136,8 +136,9 @@ const shape = Shape.interface(square);
 const result = shape.area(); // result = 4
 ```
 
-You can also add a method to the implementation struct that converts itself
-into the interface type, similar to `.allocator()` in the standard library.
+You may also want to add a method to the implementation struct that converts 
+itself into the interface type, similar to `.allocator()` in the standard 
+library.
 
 ```zig
 const Square = struct {
@@ -166,7 +167,7 @@ const shape = square.shape();
 const result = shape.area(); // result = 4
 ```
 
-## Documentation
+## Features
 
 ### Static Assertations
 
@@ -266,5 +267,61 @@ pub const Deinitializer = struct {
     std.debug.print("Deinitializing!!\n", .{});
     self.deinit();
   }
+}
+```
+
+## Documentation
+
+The library exposes only two methods:
+
+### fn Interface
+
+```zig
+fn Interface(comptime Interface: type, ptr: anytype) T
+```
+
+`Interface(T, ptr) T` is used to create instances of the 
+interface by wrapping implementation structs in the interface type. This 
+returns a structure that contains pointers to the implementation structs, as 
+well as to the methods that implement the interface.
+
+The type argument `T` **must** be a struct, and it **must** define two fields:
+- `ptr` of type `*anyopaque` or `*const anyopaue`. This pointer refers back to 
+  the object implementing the interface, and allows the interface methods to
+  access the data contained in that object. In an object oriented language,
+  the `ptr` pointer is equivalent to `this` or `self`.
+  If `ptr` is `*const anyopaque`, the interface itself is considered `const`
+  and may not contain methods that accept mutable self pointers.
+- `vtable`, a struct containing function pointers that define the interface.
+  These functions must accept `*anyopaque` or `*const anyopaque` as their first
+  argument. If `ptr` is `*const anyopaque`, all methods must accept 
+  `*const anyopaue` as their first argument. This is to preserve the const-ness
+  of the interface pointer.
+  
+The `ptr` argument must be a pointer to a struct that declares methods 
+compatible with the interface. This value is then assigned to the `ptr` field
+in the interface. If the interface is mutable (i.e. it has `ptr` of type 
+`*anyopaque`), the value passed must also be a mutable pointer.
+
+```zig
+var impl = MyImpl{};
+const instance = Interface(MyInterface, &impl);
+```
+
+### fn Implements
+
+```zig
+fn Implements(comptime Interface: type, comptime Implementation: type) void
+```
+
+`Implements(interface, impl) void` is used to enforce compile-time typechecking 
+of structs. Normally, type checking is done at compile time when instantiating
+interfaces with `Interface()`. However, if your codebase does not contain any
+instantiation (which might be the case for a library), `Implements()` can be 
+used instead:
+
+```zig
+comptime {
+  Implements(MyInterface, MyImpl);
 }
 ```
