@@ -28,4 +28,19 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
+
+    //
+    // examples
+    //
+
+    const exe_examples = b.addExecutable(.{
+        .name = "examples",
+        .root_source_file = b.path("examples/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    exe_examples.root_module.addImport("zinterface", lib_mod);
+    const run_examples = b.addRunArtifact(exe_examples);
+    const examples_step = b.step("examples", "Run examples");
+    examples_step.dependOn(&run_examples.step);
 }
