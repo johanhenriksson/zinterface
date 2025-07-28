@@ -12,7 +12,7 @@ and you like type safety, there's quite a lot of ground to cover:
 - Type check return values
 - Respect const pointers
 
-and on top of that you might want some utility such as
+and on top of that you might want some utilities such as
 
 - Support for optional methods
 - Allow users to define custom fields and methods on the interface type
@@ -23,8 +23,30 @@ Re-implementing this for each interface, or re-generalizing it in each project
 quickly becomes a pain. The details are hard to get right, and compile time
 checks are difficult to test in zig.
 
-This library attempts to resolve all of these issues by enforcing a pattern and
-adding a large number of compile-time checks for interface definitions.
+This library attempts to address all of these issues by enforcing a pattern and
+adding a large number of carefully tested compile-time checks for interface 
+definitions.
+
+## Installation
+
+Grab the latest version:
+
+```bash
+zig fetch --save git+https://github.com/johanhenriksson/zinterface.git
+```
+
+Update *build.zig*:
+```zig
+// ...
+const zinterface = b.dependency("zinterface", .{
+    .target = target,
+    .optimize = optimize,
+});
+
+// import the exposed `zinterface` module from the dependency
+exe.root_module.addImport("zinterface", zinterface.module("zinterface"));
+// ...
+```
 
 ## How to use
 
