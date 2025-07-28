@@ -1,5 +1,6 @@
 const std = @import("std");
 const Interface = @import("zinterface").Interface;
+const Implements = @import("zinterface").Implements;
 
 pub const Shape = struct {
     ptr: *const anyopaque,
@@ -42,6 +43,11 @@ pub const Circle = struct {
     }
 };
 
+comptime {
+    // Optionally assert that the implementations satisfies an interface:
+    Implements(Shape, Circle);
+}
+
 pub const Rectangle = struct {
     width: f64,
     height: f64,
@@ -67,6 +73,11 @@ pub const Rectangle = struct {
     }
 };
 
+comptime {
+    // Optionally assert that the implementations satisfies an interface:
+    Implements(Shape, Rectangle);
+}
+
 pub fn Shapes(allocator: std.mem.Allocator) !void {
     // the interface allows us to treat different shapes uniformly
     var shapes = std.ArrayList(Shape).init(allocator);
@@ -75,11 +86,18 @@ pub fn Shapes(allocator: std.mem.Allocator) !void {
     try shapes.append(Rectangle.init(4.0, 6.0).shape());
 
     std.debug.print("Shapes:\n", .{});
+    var area: f64 = 0;
+    var perimeter: f64 = 0;
     for (shapes.items, 0..) |shape, index| {
         std.debug.print("{d}: Area: {d}, Perimeter: {d}\n", .{
             index,
             shape.area(),
             shape.perimeter(),
         });
+        area += shape.area();
+        perimeter += shape.perimeter();
     }
+
+    std.debug.print("Total Area: {d}\n", .{area});
+    std.debug.print("Total Perimeter: {d}\n", .{perimeter});
 }

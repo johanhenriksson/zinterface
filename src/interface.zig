@@ -3,36 +3,44 @@ const std = @import("std");
 const validateDefinition = @import("definition.zig").validateDefinition;
 const validateImplementation = @import("implementation.zig").validateImplementation;
 
+/// Wraps the pointer in an interface of the given InterfaceType.
+/// ptr must be a pointer to a struct that implements the interface.
 pub fn Interface(comptime InterfaceType: type, ptr: anytype) InterfaceType {
-    // implementation must be a pointer
+    // implementation must be a pointer to struct
     const ptrInfo = @typeInfo(@TypeOf(ptr));
     comptime if (ptrInfo != .pointer) {
-        @compileError("Expected a pointer, got " ++ @typeName(@TypeOf(ptr)));
+        @compileError("Expected pointer to implementation, got " ++ @typeName(@TypeOf(ptr)));
     };
     const ImplType = ptrInfo.pointer.child;
 
-    // implementation must be a struct
-    const implInfo = @typeInfo(ImplType);
-    comptime if (implInfo != .@"struct") {
-        @compileError("Interface implementation must be a struct, got " ++ @typeName(ImplType));
-    };
-
-    // validate the interface definition
-    comptime if (validateDefinition(InterfaceType)) |err| {
-        err.raise(InterfaceType);
-    };
+    // ensure that the implementation satisfies the interface
+    comptime Implements(InterfaceType, ImplType);
 
     // ensure that the passed pointer is compatible with the interface
     comptime if (!checkConstCompatibility(InterfaceType, ptrInfo)) {
         @compileError("Interface " ++ @typeName(InterfaceType) ++ " requires a mutable pointer, got " ++ @typeName(@TypeOf(ptr)));
     };
 
-    // validate that the implementation matches the definition
-    comptime if (validateImplementation(InterfaceType, ImplType)) |err| {
-        err.raise(InterfaceType, ImplType);
-    };
-
     return wrap(InterfaceType, ImplType, ptr);
+}
+
+/// Asserts that ImplType satisfies the InterfaceType definition.
+pub fn Implements(comptime InterfaceType: type, comptime ImplType: type) void {
+    // implementation must be a struct
+    const implInfo = @typeInfo(ImplType);
+    if (implInfo != .@"struct") {
+        @compileError("Interface implementation must be a struct, got " ++ @typeName(ImplType));
+    }
+
+    // validate the interface definition
+    if (validateDefinition(InterfaceType)) |err| {
+        err.raise(InterfaceType);
+    }
+
+    // validate that the implementation matches the definition
+    if (validateImplementation(InterfaceType, ImplType)) |err| {
+        err.raise(InterfaceType, ImplType);
+    }
 }
 
 fn wrap(comptime InterfaceType: type, comptime ImplType: type, ptr: anytype) InterfaceType {
@@ -53,7 +61,7 @@ fn wrap(comptime InterfaceType: type, comptime ImplType: type, ptr: anytype) Int
     return result;
 }
 
-fn getInterfacePtr(comptime T: type) std.builtin.Type {
+fn getInterfacePtrInfo(comptime T: type) std.builtin.Type {
     const typeInfo = @typeInfo(T);
     for (typeInfo.@"struct".fields) |field| {
         if (std.mem.eql(u8, field.name, "ptr")) {
@@ -64,19 +72,19 @@ fn getInterfacePtr(comptime T: type) std.builtin.Type {
 }
 
 pub fn checkConstCompatibility(comptime T: type, ptrInfo: std.builtin.Type) bool {
-    const declPtrInfo = getInterfacePtr(T);
+    const declPtrInfo = getInterfacePtrInfo(T);
     if (declPtrInfo.pointer.is_const) {
         // interface takes a constant pointer, anything will do
         return true;
+    } else {
+        // the interface requires a mutable pointer
+        if (ptrInfo.pointer.is_const) {
+            return false;
+        } else {
+            // interface is compatible with the pointer type
+            return true;
+        }
     }
-
-    // if we reach here, the interface requires a mutable pointer
-    if (ptrInfo.pointer.is_const) {
-        return false;
-    }
-
-    // interface is compatible with the pointer type
-    return true;
 }
 
 test "pointer compatibility" {
