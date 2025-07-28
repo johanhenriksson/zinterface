@@ -30,25 +30,26 @@ adding a large number of compile-time checks for interface definitions.
 
 The minimum definition of an interface must contain an opaque pointer `ptr`,
 and a struct `vtable` containing function pointer definitions. You may add
-other fields and methods to your own liking.
+other fields and methods to your own liking. Lets use the good old shape 
+example to demonstrate.
 
 ```zig
-const Adder = struct {
+const Shape = struct {
   ptr: *anyopaque,
   vtable: struct {
-    add: *const fn(self: *anyopaque, v: i32) i32,
+    area: *const fn(self: *anyopaque) f32,
   },
 };
 ```
 
-A minimum implementation simply defines the method with a compatible signature:
+An implementation simply defines the method with a compatible signature:
 
 ```zig
-const AddValue = struct {
-  value: i32,
+const Square = struct {
+  side: f32,
 
-  pub fn add(self: *AddValue, v: i32) i32 {
-    return v + self.value;
+  pub fn area(self: *Square) f32 {
+    return self.side * self.side;
   }
 };
 ```
@@ -61,10 +62,10 @@ function pointers assigned.
 ```zig
 const Interface = @import("zinterface").Interface;
 
-const adderImpl = AddValue { value: 1 };
-const adder = Interface(Adder, adderImpl);
+const square = Square { .side = 2 };
+const shape = Interface(Shape, adderImpl);
 
-const result = adder.vtable.add(adder.ptr, 1); // result = 2
+const result = shape.vtable.area(adder.ptr); // result = 4
 ```
 
 In practice, its customary to to add some helpers to the interface struct for
@@ -75,20 +76,20 @@ more ergonomic use:
 - Dispatch methods that call the vtable methods, passing the self pointer.
 
 ```zig
-const Adder = struct {
+const Shape = struct {
   const Self = @This();
 
   ptr: *anyopaque,
   vtable: struct {
-    add: *const fn(self: *anyopaque, v: i32) i32,
+    area: *const fn(self: *anyopaque) f32,
   },
 
   pub fn interface(ptr: anytype) Self {
       return Interface(Self, ptr);
   }
 
-  pub fn add(self: *Self, v: i32) i32 {
-      return self.vtable.add(self.ptr, v);
+  pub fn area(self: *Self) f32 {
+      return self.vtable.area(self.ptr);
   }
 };
 ```
@@ -96,29 +97,29 @@ const Adder = struct {
 Which simplifies the usage significantly:
 
 ```zig
-const adderImpl = AddValue { value: 1 };
-const adder = Adder.interface(adderImpl);
+const square = Square { .side = 2 };
+const shape = Adder.interface(square);
 
-const result = adder.add(1); // result = 2
+const result = adder.area(); // result = 4
 ```
 
 You can also add a method to the implementation struct that converts itself
 into the interface type, similar to `.allocator()` in the standard library.
 
 ```zig
-const AddValue = struct {
+const Square = struct {
   const Self = @This();
 
-  value: i32,
+  side: i32,
 
-  pub fn add(self: *Self, v: i32) i32 {
-    return v + self.value;
+  pub fn area(self: *Self) f32 {
+    return self.side * self.side;
   }
 
-  pub fn adder(self: *Self) Adder {
-    return Adder.interface(self);
+  pub fn shape(self: *Self) Shape {
+    return Shape.interface(self);
     // .. or ...
-    return Interface(Adder, self);
+    return Interface(Shape, self);
   }
 };
 ```
@@ -126,17 +127,17 @@ const AddValue = struct {
 This trick avoids having to reference the interface type at the call site:
 
 ```zig
-const adderImpl = AddValue { value: 1 };
-const adder = adderImpl.adder();
+const square = Square { .side = 2 };
+const shape = square.shape();
 
-const result = adder.add(1); // result = 2
+const result = shape.area(); // result = 4
 ```
 
 ## Documentation
 
 ### Const Interfaces
 
-Interfaces may be declared as constant by adding a `const` modified to the `ptr` field.
+Interfaces may be declared as constant by adding a `const` modifier to the `ptr` field.
 This will reject any methods that take a mutable `self` argument.
 
 ```zig
@@ -144,7 +145,7 @@ const ConstInterface = struct {
   ptr: *const anyopaque,
   vtable: struct {
     read: *const fn(self: *const anyopaque) i32, // ok
-    write: *const fn(self: *anyopaque, i32) void, // compile error
+    write: *const fn(self: *anyopaque, i32) void, // error
   },
 };
 ```
