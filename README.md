@@ -27,6 +27,17 @@ This library attempts to address all of these issues by enforcing a pattern and
 adding a large number of carefully tested compile-time checks for interface 
 definitions.
 
+## Why?
+
+There are many Zig interface implementations, but this one is mine.
+
+- **Focus on simplicity**: The library works in the simplest way possible, 
+  making its inner workings easy to understand.
+- **Comprehensive type checking at compile time**: This is why we are here.
+- **User controls the interface type**: We don't want to loose any of the 
+  advantages of manually implementing interfaces, such as the ability
+  to add arbitrary fields and methods.
+
 ## Installation
 
 Grab the latest version:
