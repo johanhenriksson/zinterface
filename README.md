@@ -168,10 +168,26 @@ const result = shape.area(); // result = 4
 
 ## Documentation
 
+### Static Assertations
+
+You can use the Implements function at comptime to statically assert that an
+implementation satisfies a given interface. Otherwise, type checks checks only
+happen when you attempt to instantiate the interface.
+
+This is useful in libraries where there might not be any calls to `Interface()`.
+
+```zig
+const Implements = @import("zinterface").Implements;
+
+comptime {
+  Implements(Shape, Circle);
+}
+```
+
 ### Const Interfaces
 
-Interfaces may be declared as constant by adding a `const` modifier to the `ptr` field.
-This will reject any methods that take a mutable `self` argument.
+Interfaces may be declared as constant by adding a `const` modifier to the `ptr` 
+field. This will reject any methods that take a mutable `self` argument.
 
 ```zig
 const ConstInterface = struct {
@@ -185,9 +201,9 @@ const ConstInterface = struct {
 
 ### Optional methods
 
-Interface methods may be declared as optional. In this case, the `Interface()` constructor
-won't reject implementations without such a method. Instead, the function pointer will be
-set to `null`.
+Interface methods may be declared as optional. In this case, the `Interface()` 
+constructor won't reject implementations without such a method. Instead, the 
+function pointer will be set to `null`.
 
 ```zig
 const OptionalDeinit = struct {
@@ -201,9 +217,9 @@ const OptionalDeinit = struct {
 
 ### Parameter pointer promotion
 
-Implementations may "promote" parameters of type `anyopaque` to more specific types.
-This is of course an unsafe operation, which must be used with care. Note that a
-const pointer can never be promoted to a mutable pointer.
+Implementations may "promote" parameters of type `anyopaque` to more specific 
+types. This is of course an unsafe operation, which must be used with care. 
+Note that a const pointer can never be promoted to a mutable pointer.
 
 ```zig
 const PromotePointer = struct {
