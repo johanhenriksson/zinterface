@@ -1,0 +1,17 @@
+.{
+    .name = .zinterface,
+    .version = "0.1.0",
+    .fingerprint = 0xd01c855488031757,
+
+    .minimum_zig_version = "0.14.0",
+
+    .dependencies = .{},
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+        "README.md",
+    },
+}
