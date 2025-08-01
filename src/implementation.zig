@@ -141,11 +141,11 @@ fn validateMethodSignature(comptime ExpectedFn: type, comptime ActualFn: type) ?
         const actualType = actualParam.type.?;
         const actualInfo = @typeInfo(actualType);
 
-        // allow casts of specific pointer types to *anyopaque/*const anyopaque
-        if (expectedType == *anyopaque) {
+        // allow casts of anyopaque to specific pointer types
+        if (expectedType == *const anyopaque) {
             if (actualInfo == .pointer) {
-                // reject if the actual pointer is const
-                if (actualInfo.pointer.is_const) {
+                // reject if the actual pointer is mutable
+                if (!actualInfo.pointer.is_const) {
                     return .{
                         .pointerCast = .{
                             .index = index,
@@ -155,12 +155,12 @@ fn validateMethodSignature(comptime ExpectedFn: type, comptime ActualFn: type) ?
                     };
                 }
 
-                // allow cast of more specific pointers to *anyopaque
+                // allow cast of more specific pointers to *const anyopaque
                 // skip type check
                 continue :parameter;
             }
         }
-        if (expectedType == *const anyopaque) {
+        if (expectedType == *anyopaque) {
             if (actualInfo == .pointer) {
                 // allow cast of specific pointers to *const anyopaque
                 // skip type check
@@ -251,37 +251,37 @@ test "parameter type check" {
 }
 
 test "anyopaque pointer casts" {
-    // allow cast of mutable specific pointer to mutable anyopaque
+    // allow cast of mutable anyopaque to mutable specific pointer
     const result1 = validateMethodSignature(
         fn (*anyopaque, *anyopaque) void,
         fn (*anyopaque, *i32) void,
     );
     try std.testing.expectEqual(null, result1);
 
-    // allow cast of specific mutable pointer to const anyopaque
+    // allow cast of mutable anyopaque to specific const pointer
     const result2 = validateMethodSignature(
-        fn (*anyopaque, *const anyopaque) void,
-        fn (*anyopaque, *i32) void,
+        fn (*anyopaque, *anyopaque) void,
+        fn (*anyopaque, *const i32) void,
     );
     try std.testing.expectEqual(null, result2);
 
-    // allow cast of const specific pointer to const anyopaque
+    // allow cast of const anyopaque to const specific pointer
     const result3 = validateMethodSignature(
         fn (*anyopaque, *const anyopaque) void,
         fn (*anyopaque, *const i32) void,
     );
     try std.testing.expectEqual(null, result3);
 
-    // reject cast of const specific pointer to mutable anyopaque
+    // reject cast of const anyopaque to mutable specific pointer
     const error1 = comptime validateMethodSignature(
-        fn (*anyopaque, *anyopaque) void,
-        fn (*anyopaque, *const i32) void,
+        fn (*anyopaque, *const anyopaque) void,
+        fn (*anyopaque, *i32) void,
     );
     try std.testing.expectEqualDeep(MethodError{
         .pointerCast = .{
             .index = 1,
-            .expected = "*anyopaque",
-            .actual = "*const i32",
+            .expected = "*const anyopaque",
+            .actual = "*i32",
         },
     }, error1);
 

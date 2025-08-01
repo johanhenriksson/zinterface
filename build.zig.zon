@@ -1,6 +1,6 @@
 .{
     .name = .zinterface,
-    .version = "0.1.1",
+    .version = "0.1.2",
     .fingerprint = 0xd01c855488031757,
 
     .minimum_zig_version = "0.14.0",

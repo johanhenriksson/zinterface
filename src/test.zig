@@ -33,7 +33,7 @@ test "method calls" {
         const Self = @This();
         value: i32,
 
-        pub fn add(self: *Self, v: i32) i32 {
+        pub fn add(self: *const Self, v: i32) i32 {
             return v + self.value;
         }
         pub fn sub(self: *Self, v: i32) i32 {
@@ -63,4 +63,27 @@ test "optional method" {
 
     const addResult = iface.add(1);
     try std.testing.expectEqual(2, addResult);
+}
+
+test "mutability cast" {
+    const Identity = struct {
+        const Self = @This();
+
+        pub fn add(self: *const Self, v: i32) i32 {
+            _ = self;
+            return v;
+        }
+        pub fn sub(self: *const Self, v: i32) i32 {
+            // declaring self as const should still satisfy the interface,
+            // since the interface is defined with a mutable pointer
+            _ = self;
+            return v;
+        }
+    };
+
+    var impl = Identity{};
+    var iface = Interface(TestInterface, &impl);
+
+    const addResult = iface.add(1);
+    try std.testing.expectEqual(1, addResult);
 }
