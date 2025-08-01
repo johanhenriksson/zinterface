@@ -24,17 +24,17 @@ quickly becomes a pain. The details are hard to get right, and compile time
 checks are difficult to test in zig.
 
 This library attempts to address all of these issues by enforcing a pattern and
-adding a large number of carefully tested compile-time checks for interface 
+adding a large number of carefully tested compile-time checks for interface
 definitions.
 
 ## Why?
 
 There are many Zig interface implementations, but this one is mine.
 
-- **Focus on simplicity**: The library works in the simplest way possible, 
+- **Focus on simplicity**: The library works in the simplest way possible,
   making its inner workings easy to understand.
 - **Comprehensive type checking at compile time**: This is why we are here.
-- **User controls the interface type**: We don't want to loose any of the 
+- **User controls the interface type**: We don't want to loose any of the
   advantages of manually implementing interfaces, such as the ability
   to add arbitrary fields and methods.
 
@@ -46,7 +46,8 @@ Grab the latest version:
 zig fetch --save git+https://github.com/johanhenriksson/zinterface.git
 ```
 
-Update *build.zig*:
+Update _build.zig_:
+
 ```zig
 // ...
 const zinterface = b.dependency("zinterface", .{
@@ -63,7 +64,7 @@ exe.root_module.addImport("zinterface", zinterface.module("zinterface"));
 
 The minimum definition of an interface must contain an opaque pointer `ptr`,
 and a struct `vtable` containing function pointer definitions. You may add
-other fields and methods to your own liking. Lets use the good old shape 
+other fields and methods to your own liking. Lets use the good old shape
 example to demonstrate.
 
 ```zig
@@ -136,8 +137,8 @@ const shape = Shape.interface(square);
 const result = shape.area(); // result = 4
 ```
 
-You may also want to add a method to the implementation struct that converts 
-itself into the interface type, similar to `.allocator()` in the standard 
+You may also want to add a method to the implementation struct that converts
+itself into the interface type, similar to `.allocator()` in the standard
 library.
 
 ```zig
@@ -187,7 +188,7 @@ comptime {
 
 ### Const Interfaces
 
-Interfaces may be declared as constant by adding a `const` modifier to the `ptr` 
+Interfaces may be declared as constant by adding a `const` modifier to the `ptr`
 field. This will reject any methods that take a mutable `self` argument.
 
 ```zig
@@ -202,8 +203,8 @@ const ConstInterface = struct {
 
 ### Optional methods
 
-Interface methods may be declared as optional. In this case, the `Interface()` 
-constructor won't reject implementations without such a method. Instead, the 
+Interface methods may be declared as optional. In this case, the `Interface()`
+constructor won't reject implementations without such a method. Instead, the
 function pointer will be set to `null`.
 
 ```zig
@@ -218,8 +219,8 @@ const OptionalDeinit = struct {
 
 ### Parameter pointer promotion
 
-Implementations may "promote" parameters of type `anyopaque` to more specific 
-types. This is of course an unsafe operation, which must be used with care. 
+Implementations may "promote" parameters of type `anyopaque` to more specific
+types. This is of course an unsafe operation, which must be used with care.
 Note that a const pointer can never be promoted to a mutable pointer.
 
 ```zig
@@ -235,6 +236,40 @@ const MyImpl = struct {
     // ... use userdata as KnownType ...
   }
 };
+```
+
+### Mutability casts
+
+Implementations may declare const parameters in place of mutable parameters.
+Because const is are more restrictive than mutable, this is still considered
+to be compatible with the interface.
+
+```zig
+const Mutable = struct {
+  ptr: *anyopaque,
+  vtable: struct {
+    method: *const fn(self: *Mutable, param: *const Immutable),
+  }
+}
+```
+
+This is allowed, because `self` was originally mutable:
+
+```zig
+const Impl = struct {
+  // okay:
+  pub fn method(self: *const Mutable, param: *const Immutable) { ... }
+}
+```
+
+However, casting the `param` in a way that drops the `const` modifier is not
+allowed:
+
+```zig
+const Impl = struct {
+  // not okay:
+  pub fn method(self: *const Mutable, param: *Immutable) { ... }
+}
 ```
 
 ### Custom interface type
@@ -280,13 +315,14 @@ The library exposes only two methods:
 fn Interface(comptime Interface: type, ptr: anytype) T
 ```
 
-`Interface(T, ptr) T` is used to create instances of the 
-interface by wrapping implementation structs in the interface type. This 
-returns a structure that contains pointers to the implementation structs, as 
+`Interface(T, ptr) T` is used to create instances of the
+interface by wrapping implementation structs in the interface type. This
+returns a structure that contains pointers to the implementation structs, as
 well as to the methods that implement the interface.
 
 The type argument `T` **must** be a struct, and it **must** define two fields:
-- `ptr` of type `*anyopaque` or `*const anyopaue`. This pointer refers back to 
+
+- `ptr` of type `*anyopaque` or `*const anyopaue`. This pointer refers back to
   the object implementing the interface, and allows the interface methods to
   access the data contained in that object. In an object oriented language,
   the `ptr` pointer is equivalent to `this` or `self`.
@@ -294,13 +330,13 @@ The type argument `T` **must** be a struct, and it **must** define two fields:
   and may not contain methods that accept mutable self pointers.
 - `vtable`, a struct containing function pointers that define the interface.
   These functions must accept `*anyopaque` or `*const anyopaque` as their first
-  argument. If `ptr` is `*const anyopaque`, all methods must accept 
+  argument. If `ptr` is `*const anyopaque`, all methods must accept
   `*const anyopaue` as their first argument. This is to preserve the const-ness
   of the interface pointer.
-  
-The `ptr` argument must be a pointer to a struct that declares methods 
+
+The `ptr` argument must be a pointer to a struct that declares methods
 compatible with the interface. This value is then assigned to the `ptr` field
-in the interface. If the interface is mutable (i.e. it has `ptr` of type 
+in the interface. If the interface is mutable (i.e. it has `ptr` of type
 `*anyopaque`), the value passed must also be a mutable pointer.
 
 ```zig
@@ -314,10 +350,10 @@ const instance = Interface(MyInterface, &impl);
 fn Implements(comptime Interface: type, comptime Implementation: type) void
 ```
 
-`Implements(interface, impl) void` is used to enforce compile-time typechecking 
+`Implements(interface, impl) void` is used to enforce compile-time typechecking
 of structs. Normally, type checking is done at compile time when instantiating
 interfaces with `Interface()`. However, if your codebase does not contain any
-instantiation (which might be the case for a library), `Implements()` can be 
+instantiation (which might be the case for a library), `Implements()` can be
 used instead:
 
 ```zig
