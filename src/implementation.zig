@@ -2,7 +2,7 @@ const std = @import("std");
 const Type = std.builtin.Type;
 const Interface = @import("interface.zig").Interface;
 
-const ImplementationError = union(enum) {
+pub const ImplementationError = union(enum) {
     missingMethod: struct { method: []const u8 },
     invalidMethod: struct { method: []const u8 },
     signatureError: struct {
@@ -19,7 +19,8 @@ const ImplementationError = union(enum) {
             .missingMethod => @compileError(msg ++ " is missing method '" ++ self.missingMethod.method ++ "'"),
             .invalidMethod => @compileError(msg ++ " expected '" ++ self.invalidMethod.method ++ "' to be a method"),
             .signatureError => |err| {
-                err.inner.raise(ImplType, err.method);
+                const innerMsg = err.inner.message(ImplType, err.method);
+                @compileError(msg ++ " method {s} has " ++ innerMsg);
             },
         }
     }
@@ -80,36 +81,29 @@ const MethodError = union(enum) {
         actual: []const u8,
     },
 
-    pub fn raise(self: MethodError, comptime T: type, comptime methodName: []const u8) void {
-        const name = std.fmt.comptimePrint("{s}.{s}", .{ @typeName(T), methodName });
-        switch (self) {
-            .wrongParameterCount => |err| @compileError(std.fmt.comptimePrint(
-                "Interface method {s} has wrong parameter count: expected {d}, got {d}",
-                .{ name, err.expected, err.actual },
-            )),
-            .returnType => |err| {
-                @compileError(std.fmt.comptimePrint(
-                    "Interface method {s} has wrong return type: expected {s}, got {s}",
-                    .{ name, err.expected, err.actual },
-                ));
-            },
-            .parameterType => |err| {
-                @compileError(std.fmt.comptimePrint(
-                    "Interface method {s} parameter {d} has wrong type: expected {s}, got {s}",
-                    .{ name, err.index, err.expected, err.actual },
-                ));
-            },
-            .pointerCast => |err| {
-                @compileError(std.fmt.comptimePrint(
-                    "Interface method {s} parameter {d} cant be cast from const {s} to mutable {s}",
-                    .{ name, err.index, err.expected, err.actual },
-                ));
-            },
-        }
+    pub fn message(comptime self: MethodError) []const u8 {
+        return switch (self) {
+            .wrongParameterCount => |err| std.fmt.comptimePrint(
+                "wrong parameter count: expected {d}, got {d}",
+                .{ err.expected, err.actual },
+            ),
+            .returnType => |err| std.fmt.comptimePrint(
+                "wrong return type: expected {s}, got {s}",
+                .{ err.expected, err.actual },
+            ),
+            .parameterType => |err| std.fmt.comptimePrint(
+                "parameter {d} has wrong type: expected {s}, got {s}",
+                .{ err.index, err.expected, err.actual },
+            ),
+            .pointerCast => |err| std.fmt.comptimePrint(
+                "parameter {d} cant be cast from {s} to mutable {s}",
+                .{ err.index, err.expected, err.actual },
+            ),
+        };
     }
 };
 
-fn validateMethodSignature(comptime ExpectedFn: type, comptime ActualFn: type) ?MethodError {
+pub fn validateMethodSignature(comptime ExpectedFn: type, comptime ActualFn: type) ?MethodError {
     const expectedFn = @typeInfo(ExpectedFn).@"fn";
     const actualFn = @typeInfo(ActualFn).@"fn";
 
