@@ -3,6 +3,7 @@ const std = @import("std");
 pub const Interface = @import("interface.zig").Interface;
 pub const validateDefinition = @import("definition.zig").validateDefinition;
 pub const validateImplementation = @import("implementation.zig").validateImplementation;
+pub const fnCast = @import("utility.zig").fnCast;
 
 test {
     std.testing.log_level = .debug;
