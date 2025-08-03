@@ -20,7 +20,7 @@ pub const ImplementationError = union(enum) {
             .invalidMethod => @compileError(msg ++ " expected '" ++ self.invalidMethod.method ++ "' to be a method"),
             .signatureError => |err| {
                 const innerMsg = err.inner.message();
-                @compileError(msg ++ " method {s} has " ++ innerMsg);
+                @compileError(msg ++ " method " ++ err.method ++ " has " ++ innerMsg);
             },
         }
     }
