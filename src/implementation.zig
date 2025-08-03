@@ -19,7 +19,7 @@ pub const ImplementationError = union(enum) {
             .missingMethod => @compileError(msg ++ " is missing method '" ++ self.missingMethod.method ++ "'"),
             .invalidMethod => @compileError(msg ++ " expected '" ++ self.invalidMethod.method ++ "' to be a method"),
             .signatureError => |err| {
-                const innerMsg = err.inner.message(ImplType, err.method);
+                const innerMsg = err.inner.message();
                 @compileError(msg ++ " method {s} has " ++ innerMsg);
             },
         }
