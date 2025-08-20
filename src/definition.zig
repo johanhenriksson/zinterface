@@ -35,77 +35,60 @@ pub fn validateDefinition(comptime InterfaceType: type) ?DefinitionError {
             break :block .{ .invalidType = .{ .actual = @tagName(typeInfo) } };
         }
 
-        var hasPtr = false;
-        var constPtr = false;
-        var hasVtable = false;
-        var emptyVtable = true;
-
-        for (typeInfo.@"struct".fields) |field| {
-            if (std.mem.eql(u8, field.name, "ptr")) {
-                hasPtr = true;
-                constPtr = field.type == *const anyopaque;
-
-                const ptrType = field.type;
-                if (ptrType != *anyopaque and ptrType != *const anyopaque) {
-                    break :block .{ .invalidPtr = .{ .type = @typeName(ptrType) } };
-                }
-            }
-        }
-        if (!hasPtr) {
+        if (!@hasField(InterfaceType, "ptr")) {
             break :block .{ .missingPtr = {} };
         }
 
-        for (typeInfo.@"struct".fields) |field| {
-            if (std.mem.eql(u8, field.name, "vtable")) {
-                hasVtable = true;
-
-                const vtableType = field.type;
-                const vtableInfo = @typeInfo(vtableType);
-                if (vtableInfo != .@"struct") {
-                    break :block .{ .invalidVtable = .{ .actual = @tagName(vtableInfo) } };
-                }
-
-                emptyVtable = vtableInfo.@"struct".fields.len == 0;
-
-                for (vtableInfo.@"struct".fields) |vfield| {
-                    // check that vtable fields are function pointers
-                    var methodPtrInfo = @typeInfo(vfield.type);
-
-                    // optional methods are allowed - unpack one level
-                    if (methodPtrInfo == .optional) {
-                        methodPtrInfo = @typeInfo(methodPtrInfo.optional.child);
-                    }
-
-                    if (methodPtrInfo != .pointer) {
-                        break :block .{ .invalidMethod = .{ .method = vfield.name } };
-                    }
-                    const methodInfo = @typeInfo(methodPtrInfo.pointer.child);
-                    if (methodInfo != .@"fn") {
-                        break :block .{ .invalidMethod = .{ .method = vfield.name } };
-                    }
-
-                    // methods must have at least 1 parameter
-                    const methodFn = methodInfo.@"fn";
-                    if (methodFn.params.len == 0) {
-                        break :block .{ .invalidSignature = .{ .method = vfield.name } };
-                    }
-                    // the first parameter must be *anyopaque or *const anyopaque
-                    const firstParam = methodFn.params[0];
-                    if (firstParam.type != *anyopaque and firstParam.type != *const anyopaque) {
-                        break :block .{ .invalidSignature = .{ .method = vfield.name } };
-                    }
-                    // mutability must match the interface
-                    if (constPtr and firstParam.type == *anyopaque) {
-                        break :block .{ .mutableMethod = .{ .method = vfield.name } };
-                    }
-                }
-            }
+        const ptrType = @TypeOf(@as(InterfaceType, undefined).ptr);
+        const constPtr = ptrType == *const anyopaque;
+        if (ptrType != *anyopaque and ptrType != *const anyopaque) {
+            break :block .{ .invalidPtr = .{ .type = @typeName(ptrType) } };
         }
-        if (!hasVtable) {
+
+        if (!@hasField(InterfaceType, "vtable")) {
             break :block .{ .missingVtable = {} };
         }
-        if (emptyVtable) {
+
+        const VtableType = @TypeOf(@as(InterfaceType, undefined).vtable);
+        const vtableInfo = @typeInfo(VtableType);
+        if (vtableInfo != .@"struct") {
+            break :block .{ .invalidVtable = .{ .actual = @tagName(vtableInfo) } };
+        }
+
+        const vtableFields = vtableInfo.@"struct".fields;
+        if (vtableFields.len == 0) {
             break :block .{ .emptyVtable = {} };
+        }
+        for (vtableFields) |vfield| {
+            var methodPtrInfo = @typeInfo(vfield.type);
+
+            // optional methods are allowed - unpack one level
+            if (methodPtrInfo == .optional) {
+                methodPtrInfo = @typeInfo(methodPtrInfo.optional.child);
+            }
+
+            if (methodPtrInfo != .pointer) {
+                break :block .{ .invalidMethod = .{ .method = vfield.name } };
+            }
+            const methodInfo = @typeInfo(methodPtrInfo.pointer.child);
+            if (methodInfo != .@"fn") {
+                break :block .{ .invalidMethod = .{ .method = vfield.name } };
+            }
+
+            // methods must have at least 1 parameter
+            const methodFn = methodInfo.@"fn";
+            if (methodFn.params.len == 0) {
+                break :block .{ .invalidSignature = .{ .method = vfield.name } };
+            }
+            // the first parameter must be *anyopaque or *const anyopaque
+            const firstParam = methodFn.params[0];
+            if (firstParam.type != *anyopaque and firstParam.type != *const anyopaque) {
+                break :block .{ .invalidSignature = .{ .method = vfield.name } };
+            }
+            // mutability must match the interface
+            if (constPtr and firstParam.type == *anyopaque) {
+                break :block .{ .mutableMethod = .{ .method = vfield.name } };
+            }
         }
 
         break :block null;

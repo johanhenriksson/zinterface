@@ -27,11 +27,11 @@ pub const ImplementationError = union(enum) {
 };
 
 pub fn validateImplementation(comptime InterfaceType: type, comptime ImplType: type) ?ImplementationError {
-    const iface: InterfaceType = undefined;
+    const VtableType = @TypeOf(@as(InterfaceType, undefined).vtable);
+    const vtableInfo = @typeInfo(VtableType);
+    const vtableFields = vtableInfo.@"struct".fields;
 
-    // find all vtable fields and match them to methods
-    const vtableInfo = @typeInfo(@TypeOf(iface.vtable));
-    for (vtableInfo.@"struct".fields) |field| {
+    inline for (vtableFields) |field| {
         var fieldType = field.type;
         var interfaceMethodPtrInfo = @typeInfo(field.type);
         var optional = false;
@@ -49,7 +49,6 @@ pub fn validateImplementation(comptime InterfaceType: type, comptime ImplType: t
             return .{ .missingMethod = .{ .method = methodName } };
         }
 
-        // compare signatures
         const implementationField = @field(ImplType, methodName);
         const implementationFnType = @TypeOf(implementationField);
         const implementationInfo = @typeInfo(implementationFnType);

@@ -47,8 +47,11 @@ fn wrap(comptime InterfaceType: type, comptime ImplType: type, ptr: anytype) Int
     var result: InterfaceType = undefined;
     result.ptr = ptr;
 
-    const vtableInfo = @typeInfo(@TypeOf(result.vtable));
-    inline for (vtableInfo.@"struct".fields) |field| {
+    const VtableType = @TypeOf(@as(InterfaceType, undefined).vtable);
+    const vtableInfo = @typeInfo(VtableType);
+    const vtableFields = vtableInfo.@"struct".fields;
+
+    inline for (vtableFields) |field| {
         const methodInfo = @typeInfo(field.type);
         if (!@hasDecl(ImplType, field.name) and methodInfo == .optional) {
             @field(result.vtable, field.name) = null;
@@ -61,18 +64,10 @@ fn wrap(comptime InterfaceType: type, comptime ImplType: type, ptr: anytype) Int
     return result;
 }
 
-fn getInterfacePtrInfo(comptime T: type) std.builtin.Type {
-    const typeInfo = @typeInfo(T);
-    for (typeInfo.@"struct".fields) |field| {
-        if (std.mem.eql(u8, field.name, "ptr")) {
-            return @typeInfo(field.type);
-        }
-    }
-    unreachable;
-}
-
 pub fn checkConstCompatibility(comptime T: type, ptrInfo: std.builtin.Type) bool {
-    const declPtrInfo = getInterfacePtrInfo(T);
+    const PtrType = @TypeOf(@as(T, undefined).ptr);
+    const declPtrInfo = @typeInfo(PtrType);
+
     if (declPtrInfo.pointer.is_const) {
         // interface takes a constant pointer, anything will do
         return true;
