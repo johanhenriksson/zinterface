@@ -1,34 +1,8 @@
 const std = @import("std");
 const Interface = @import("interface.zig").Interface;
+const InterfaceError = @import("error.zig").InterfaceError;
 
-pub const DefinitionError = union(enum) {
-    invalidType: struct { actual: []const u8 },
-    invalidPtr: struct { type: []const u8 },
-    invalidVtable: struct { actual: []const u8 },
-    missingPtr: void,
-    missingVtable: void,
-    emptyVtable: void,
-    invalidMethod: struct { method: []const u8 },
-    invalidSignature: struct { method: []const u8 },
-    mutableMethod: struct { method: []const u8 },
-
-    pub fn raise(err: DefinitionError, comptime T: type) void {
-        const name = @typeName(T);
-        switch (err) {
-            .invalidType => |e| @compileError("Interface " ++ name ++ " must be a struct, got " ++ e.actual),
-            .invalidPtr => |e| @compileError("Interface " ++ name ++ " must have a 'ptr' field of type *anyopaque, got " ++ e.type),
-            .missingPtr => @compileError("Interface " ++ name ++ " must have a 'ptr' field"),
-            .missingVtable => @compileError("Interface " ++ name ++ " must have a 'vtable' field"),
-            .emptyVtable => @compileError("Interface " ++ name ++ " must have at least one method in the vtable"),
-            .invalidVtable => |e| @compileError("Interface " ++ name ++ " vtable must be a struct, got " ++ e.actual),
-            .invalidMethod => |e| @compileError("Interface " ++ name ++ " method '" ++ e.method ++ "' must be a function pointer"),
-            .invalidSignature => |e| @compileError("Interface " ++ name ++ " method '" ++ e.method ++ "' must accept *anyopaque or *const anyopaque as the first argument"),
-            .mutableMethod => |e| @compileError("Const Interface " ++ name ++ " method '" ++ e.method ++ "' cant have mutable self argument"),
-        }
-    }
-};
-
-pub fn validateDefinition(comptime InterfaceType: type) ?DefinitionError {
+pub fn validateDefinition(comptime InterfaceType: type) ?InterfaceError {
     return comptime block: {
         const typeInfo = @typeInfo(InterfaceType);
         if (typeInfo != .@"struct") {
@@ -97,7 +71,7 @@ pub fn validateDefinition(comptime InterfaceType: type) ?DefinitionError {
 
 test "interface must be struct" {
     const result = validateDefinition(i32).?;
-    try std.testing.expectEqualDeep(DefinitionError{ .invalidType = .{ .actual = "int" } }, result);
+    try std.testing.expectEqualDeep(InterfaceError{ .invalidType = .{ .actual = "int" } }, result);
 
     // const impl = struct {}{};
     // _ = Interface(i32, &impl);
@@ -106,7 +80,7 @@ test "interface must be struct" {
 test "interface must have ptr" {
     const Iface = struct {};
     const result = validateDefinition(Iface).?;
-    try std.testing.expectEqualDeep(DefinitionError{ .missingPtr = {} }, result);
+    try std.testing.expectEqualDeep(InterfaceError{ .missingPtr = {} }, result);
 
     // const impl = struct {}{};
     // _ = Interface(Iface, &impl);
@@ -115,7 +89,7 @@ test "interface must have ptr" {
 test "interface ptr must be anyopaque" {
     const Iface = struct { ptr: i32 };
     const result = validateDefinition(Iface).?;
-    try std.testing.expectEqualDeep(DefinitionError{ .invalidPtr = .{ .type = "i32" } }, result);
+    try std.testing.expectEqualDeep(InterfaceError{ .invalidPtr = .{ .type = "i32" } }, result);
 
     // const impl = struct {}{};
     // _ = Interface(Iface, &impl);
@@ -124,7 +98,7 @@ test "interface ptr must be anyopaque" {
 test "interface must have vtable" {
     const Iface = struct { ptr: *anyopaque };
     const result = validateDefinition(Iface).?;
-    try std.testing.expectEqualDeep(DefinitionError{ .missingVtable = {} }, result);
+    try std.testing.expectEqualDeep(InterfaceError{ .missingVtable = {} }, result);
 
     // const impl = struct {}{};
     // _ = Interface(Iface, &impl);
@@ -136,7 +110,7 @@ test "vtable must be struct" {
         vtable: i32,
     };
     const result = validateDefinition(Iface).?;
-    try std.testing.expectEqualDeep(DefinitionError{ .invalidVtable = .{ .actual = "int" } }, result);
+    try std.testing.expectEqualDeep(InterfaceError{ .invalidVtable = .{ .actual = "int" } }, result);
 
     // const impl = struct {}{};
     // _ = Interface(Iface, &impl);
@@ -148,7 +122,7 @@ test "vtable must not be empty" {
         vtable: struct {},
     };
     const result = validateDefinition(Iface).?;
-    try std.testing.expectEqualDeep(DefinitionError{ .emptyVtable = {} }, result);
+    try std.testing.expectEqualDeep(InterfaceError{ .emptyVtable = {} }, result);
 
     // const impl = struct {}{};
     // _ = Interface(Iface, &impl);
@@ -162,7 +136,7 @@ test "vtable method must be function pointer" {
         },
     };
     const result = validateDefinition(Iface).?;
-    try std.testing.expectEqualDeep(DefinitionError{ .invalidMethod = .{ .method = "method" } }, result);
+    try std.testing.expectEqualDeep(InterfaceError{ .invalidMethod = .{ .method = "method" } }, result);
 
     // const impl = struct {}{};
     // _ = Interface(Iface, &impl);
@@ -187,7 +161,7 @@ test "interface vtable method must have at least one parameter" {
         },
     };
     const result = validateDefinition(Iface).?;
-    try std.testing.expectEqualDeep(DefinitionError{ .invalidSignature = .{ .method = "method" } }, result);
+    try std.testing.expectEqualDeep(InterfaceError{ .invalidSignature = .{ .method = "method" } }, result);
 
     // const impl = struct {}{};
     // _ = Interface(Iface, &impl);
@@ -201,7 +175,7 @@ test "valid self pointer" {
         },
     };
     const result = validateDefinition(Iface).?;
-    try std.testing.expectEqualDeep(DefinitionError{ .invalidSignature = .{ .method = "method" } }, result);
+    try std.testing.expectEqualDeep(InterfaceError{ .invalidSignature = .{ .method = "method" } }, result);
 
     // const impl = struct {}{};
     // _ = Interface(Iface, &impl);
@@ -215,7 +189,7 @@ test "reject mutable pointer on const interface" {
         },
     };
     const result = validateDefinition(Iface).?;
-    try std.testing.expectEqualDeep(DefinitionError{ .mutableMethod = .{ .method = "method" } }, result);
+    try std.testing.expectEqualDeep(InterfaceError{ .mutableMethod = .{ .method = "method" } }, result);
 
     // const impl = struct {}{};
     // _ = Interface(Iface, &impl);

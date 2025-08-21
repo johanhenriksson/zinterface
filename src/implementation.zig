@@ -1,32 +1,9 @@
 const std = @import("std");
 const Type = std.builtin.Type;
 const Interface = @import("interface.zig").Interface;
+const InterfaceError = @import("error.zig").InterfaceError;
 
-pub const ImplementationError = union(enum) {
-    missingMethod: struct { method: []const u8 },
-    invalidMethod: struct { method: []const u8 },
-    signatureError: struct {
-        method: []const u8,
-        inner: MethodError,
-    },
-
-    pub fn raise(self: ImplementationError, comptime InterfaceType: type, comptime ImplType: type) void {
-        const msg = std.fmt.comptimePrint("{s} implementation {s}", .{
-            @typeName(InterfaceType),
-            @typeName(ImplType),
-        });
-        switch (self) {
-            .missingMethod => @compileError(msg ++ " is missing method '" ++ self.missingMethod.method ++ "'"),
-            .invalidMethod => @compileError(msg ++ " expected '" ++ self.invalidMethod.method ++ "' to be a method"),
-            .signatureError => |err| {
-                const innerMsg = err.inner.message();
-                @compileError(msg ++ " method " ++ err.method ++ " has " ++ innerMsg);
-            },
-        }
-    }
-};
-
-pub fn validateImplementation(comptime InterfaceType: type, comptime ImplType: type) ?ImplementationError {
+pub fn validateImplementation(comptime InterfaceType: type, comptime ImplType: type) ?InterfaceError {
     const VtableType = @TypeOf(@as(InterfaceType, undefined).vtable);
     const vtableInfo = @typeInfo(VtableType);
     const vtableFields = vtableInfo.@"struct".fields;
@@ -57,8 +34,8 @@ pub fn validateImplementation(comptime InterfaceType: type, comptime ImplType: t
         }
 
         const interfaceFnType = interfaceMethodPtrInfo.pointer.child;
-        if (validateMethodSignature(interfaceFnType, implementationFnType)) |err| {
-            return .{ .signatureError = .{ .method = methodName, .inner = err } };
+        if (validateMethodSignature(methodName, interfaceFnType, implementationFnType)) |err| {
+            return err;
         }
     }
 
@@ -66,43 +43,7 @@ pub fn validateImplementation(comptime InterfaceType: type, comptime ImplType: t
     return null;
 }
 
-const MethodError = union(enum) {
-    wrongParameterCount: struct { expected: usize, actual: usize },
-    returnType: struct { expected: []const u8, actual: []const u8 },
-    parameterType: struct {
-        index: usize,
-        expected: []const u8,
-        actual: []const u8,
-    },
-    pointerCast: struct {
-        index: usize,
-        expected: []const u8,
-        actual: []const u8,
-    },
-
-    pub fn message(comptime self: MethodError) []const u8 {
-        return switch (self) {
-            .wrongParameterCount => |err| std.fmt.comptimePrint(
-                "wrong parameter count: expected {d}, got {d}",
-                .{ err.expected, err.actual },
-            ),
-            .returnType => |err| std.fmt.comptimePrint(
-                "wrong return type: expected {s}, got {s}",
-                .{ err.expected, err.actual },
-            ),
-            .parameterType => |err| std.fmt.comptimePrint(
-                "parameter {d} has wrong type: expected {s}, got {s}",
-                .{ err.index, err.expected, err.actual },
-            ),
-            .pointerCast => |err| std.fmt.comptimePrint(
-                "parameter {d} cant be cast from {s} to mutable {s}",
-                .{ err.index, err.expected, err.actual },
-            ),
-        };
-    }
-};
-
-pub fn validateMethodSignature(comptime ExpectedFn: type, comptime ActualFn: type) ?MethodError {
+pub fn validateMethodSignature(comptime methodName: []const u8, comptime ExpectedFn: type, comptime ActualFn: type) ?InterfaceError {
     const expectedFn = @typeInfo(ExpectedFn).@"fn";
     const actualFn = @typeInfo(ActualFn).@"fn";
 
@@ -110,6 +51,7 @@ pub fn validateMethodSignature(comptime ExpectedFn: type, comptime ActualFn: typ
     if (expectedFn.params.len != actualFn.params.len) {
         return .{
             .wrongParameterCount = .{
+                .method = methodName,
                 .expected = expectedFn.params.len,
                 .actual = actualFn.params.len,
             },
@@ -121,7 +63,8 @@ pub fn validateMethodSignature(comptime ExpectedFn: type, comptime ActualFn: typ
         const expectedRet = if (expectedFn.return_type) |t| @typeName(t) else "void";
         const actualRet = if (actualFn.return_type) |t| @typeName(t) else "void";
         return .{
-            .returnType = .{
+            .wrongReturnType = .{
+                .method = methodName,
                 .expected = expectedRet,
                 .actual = actualRet,
             },
@@ -140,7 +83,8 @@ pub fn validateMethodSignature(comptime ExpectedFn: type, comptime ActualFn: typ
                 // reject if the actual pointer is mutable
                 if (!actualInfo.pointer.is_const) {
                     return .{
-                        .pointerCast = .{
+                        .invalidPointerCast = .{
+                            .method = methodName,
                             .index = index,
                             .expected = @typeName(expectedType),
                             .actual = @typeName(actualType),
@@ -163,7 +107,8 @@ pub fn validateMethodSignature(comptime ExpectedFn: type, comptime ActualFn: typ
 
         if (expectedType != actualType) {
             return .{
-                .parameterType = .{
+                .wrongParameterType = .{
+                    .method = methodName,
                     .index = index,
                     .expected = @typeName(expectedType),
                     .actual = @typeName(actualType),
@@ -185,7 +130,7 @@ const TestInterface = struct {
 test "missing method" {
     const Impl = struct {};
     const error1 = comptime validateImplementation(TestInterface, Impl);
-    try std.testing.expectEqualDeep(ImplementationError{
+    try std.testing.expectEqualDeep(InterfaceError{
         .missingMethod = .{ .method = "method" },
     }, error1);
 
@@ -197,7 +142,7 @@ test "invalid method" {
         pub const method = struct {};
     };
     const error1 = comptime validateImplementation(TestInterface, Impl);
-    try std.testing.expectEqualDeep(ImplementationError{
+    try std.testing.expectEqualDeep(InterfaceError{
         .invalidMethod = .{ .method = "method" },
     }, error1);
 
@@ -206,16 +151,19 @@ test "invalid method" {
 
 test "return value checks" {
     const result = validateMethodSignature(
+        "method",
         fn (*anyopaque) i32,
         fn (*anyopaque) i32,
     );
     try std.testing.expectEqual(null, result);
 
     const error1 = comptime validateMethodSignature(
+        "method",
         fn (*anyopaque) i32,
         fn (*anyopaque) void,
     );
-    try std.testing.expectEqualDeep(MethodError{ .returnType = .{
+    try std.testing.expectEqualDeep(InterfaceError{ .wrongReturnType = .{
+        .method = "method",
         .expected = "i32",
         .actual = "void",
     } }, error1);
@@ -225,16 +173,19 @@ test "return value checks" {
 
 test "parameter type check" {
     const result = validateMethodSignature(
+        "method",
         fn (*anyopaque, i32) void,
         fn (*anyopaque, i32) void,
     );
     try std.testing.expectEqual(null, result);
 
     const error1 = comptime validateMethodSignature(
+        "method",
         fn (*anyopaque, i32) void,
         fn (*anyopaque, f32) void,
     );
-    try std.testing.expectEqualDeep(MethodError{ .parameterType = .{
+    try std.testing.expectEqualDeep(InterfaceError{ .wrongParameterType = .{
+        .method = "method",
         .index = 1,
         .expected = "i32",
         .actual = "f32",
@@ -246,6 +197,7 @@ test "parameter type check" {
 test "anyopaque pointer casts" {
     // allow cast of mutable anyopaque to mutable specific pointer
     const result1 = validateMethodSignature(
+        "method",
         fn (*anyopaque, *anyopaque) void,
         fn (*anyopaque, *i32) void,
     );
@@ -253,6 +205,7 @@ test "anyopaque pointer casts" {
 
     // allow cast of mutable anyopaque to specific const pointer
     const result2 = validateMethodSignature(
+        "method",
         fn (*anyopaque, *anyopaque) void,
         fn (*anyopaque, *const i32) void,
     );
@@ -260,6 +213,7 @@ test "anyopaque pointer casts" {
 
     // allow cast of const anyopaque to const specific pointer
     const result3 = validateMethodSignature(
+        "method",
         fn (*anyopaque, *const anyopaque) void,
         fn (*anyopaque, *const i32) void,
     );
@@ -267,11 +221,13 @@ test "anyopaque pointer casts" {
 
     // reject cast of const anyopaque to mutable specific pointer
     const error1 = comptime validateMethodSignature(
+        "method",
         fn (*anyopaque, *const anyopaque) void,
         fn (*anyopaque, *i32) void,
     );
-    try std.testing.expectEqualDeep(MethodError{
-        .pointerCast = .{
+    try std.testing.expectEqualDeep(InterfaceError{
+        .invalidPointerCast = .{
+            .method = "method",
             .index = 1,
             .expected = "*const anyopaque",
             .actual = "*i32",
@@ -283,10 +239,12 @@ test "anyopaque pointer casts" {
 
 test "wrong parameter count" {
     const error1 = comptime validateMethodSignature(
+        "method",
         fn (*anyopaque, i32, f32) void,
         fn (*anyopaque, i32) void,
     );
-    try std.testing.expectEqualDeep(MethodError{ .wrongParameterCount = .{
+    try std.testing.expectEqualDeep(InterfaceError{ .wrongParameterCount = .{
+        .method = "method",
         .expected = 3,
         .actual = 2,
     } }, error1);

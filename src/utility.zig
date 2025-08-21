@@ -19,8 +19,8 @@ pub fn fnCast(comptime T: type, ptr: anytype) *const T {
         @compileError("Expected ptr to be a function pointer, got " ++ @typeName(actual));
     };
 
-    comptime if (validateMethodSignature(expected, actual)) |err| {
-        @compileError("Function pointers are incompatible: " ++ err.message());
+    comptime if (validateMethodSignature("fnCast", expected, actual)) |_| {
+        @compileError("Function pointers are incompatible");
     };
 
     return @ptrCast(ptr);

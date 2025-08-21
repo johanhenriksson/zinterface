@@ -2,6 +2,7 @@ const std = @import("std");
 
 const validateDefinition = @import("definition.zig").validateDefinition;
 const validateImplementation = @import("implementation.zig").validateImplementation;
+const InterfaceError = @import("error.zig").InterfaceError;
 
 /// Wraps the pointer in an interface of the given InterfaceType.
 /// ptr must be a pointer to a struct that implements the interface.
@@ -34,12 +35,12 @@ pub fn Implements(comptime InterfaceType: type, comptime ImplType: type) void {
 
     // validate the interface definition
     if (validateDefinition(InterfaceType)) |err| {
-        err.raise(InterfaceType);
+        err.raiseDefinition(InterfaceType);
     }
 
     // validate that the implementation matches the definition
     if (validateImplementation(InterfaceType, ImplType)) |err| {
-        err.raise(InterfaceType, ImplType);
+        err.raiseImplementation(InterfaceType, ImplType);
     }
 }
 
