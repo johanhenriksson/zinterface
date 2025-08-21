@@ -69,9 +69,9 @@ example to demonstrate.
 
 ```zig
 const Shape = struct {
-  ptr: *anyopaque,
+  ptr: *const anyopaque,
   vtable: struct {
-    area: *const fn(self: *anyopaque) f32,
+    area: *const fn(self: *const anyopaque) f32,
   },
 };
 ```
@@ -82,7 +82,7 @@ An implementation simply defines the method with a compatible signature:
 const Square = struct {
   side: f32,
 
-  pub fn area(self: *Square) f32 {
+  pub fn area(self: *const Square) f32 {
     return self.side * self.side;
   }
 };
@@ -97,7 +97,7 @@ function pointers assigned.
 const Interface = @import("zinterface").Interface;
 
 const square = Square { .side = 2 };
-const shape = Interface(Shape, square);
+const shape = Interface(Shape, &square);
 
 const result = shape.vtable.area(shape.ptr); // result = 4
 ```
@@ -113,16 +113,16 @@ more ergonomic use:
 const Shape = struct {
   const Self = @This();
 
-  ptr: *anyopaque,
+  ptr: *const anyopaque,
   vtable: struct {
-    area: *const fn(self: *anyopaque) f32,
+    area: *const fn(self: *const anyopaque) f32,
   },
 
   pub fn interface(ptr: anytype) Self {
       return Interface(Self, ptr);
   }
 
-  pub fn area(self: *Self) f32 {
+  pub fn area(self: *const Self) f32 {
       return self.vtable.area(self.ptr);
   }
 };
@@ -132,7 +132,7 @@ This simplifies the usage significantly:
 
 ```zig
 const square = Square { .side = 2 };
-const shape = Shape.interface(square);
+const shape = Shape.interface(&square);
 
 const result = shape.area(); // result = 4
 ```
@@ -145,13 +145,13 @@ library.
 const Square = struct {
   const Self = @This();
 
-  side: i32,
+  side: f32,
 
-  pub fn area(self: *Self) f32 {
+  pub fn area(self: *const Self) f32 {
     return self.side * self.side;
   }
 
-  pub fn shape(self: *Self) Shape {
+  pub fn shape(self: *const Self) Shape {
     return Shape.interface(self);
     // .. or ...
     return Interface(Shape, self);
@@ -189,7 +189,8 @@ comptime {
 ### Const Interfaces
 
 Interfaces may be declared as constant by adding a `const` modifier to the `ptr`
-field. This will reject any methods that take a mutable `self` argument.
+field. Const interfaces will only allow methods that take a `self` argument of
+type `*const anyopaque`.
 
 ```zig
 const ConstInterface = struct {
@@ -248,7 +249,7 @@ to be compatible with the interface.
 const Mutable = struct {
   ptr: *anyopaque,
   vtable: struct {
-    method: *const fn(self: *Mutable, param: *const Immutable),
+    method: *const fn(self: *anyopaque, param: *const Immutable),
   }
 }
 ```
@@ -293,12 +294,12 @@ pub const Deinitializer = struct {
     self.destroyed = true;
 
     if (self.vtable.deinit) |deinitFn| {
-      deinitFn();
+      deinitFn(self.ptr);
     }
   }
 
   // methods unrelated to the interface are also ok:
-  pub fn deinitLog(self: *const Deinitalizer) void {
+  pub fn deinitLog(self: *const Deinitializer) void {
     std.debug.print("Deinitializing!!\n", .{});
     self.deinit();
   }
@@ -307,7 +308,7 @@ pub const Deinitializer = struct {
 
 ## Documentation
 
-The library exposes only two methods:
+The library exposes two main functions:
 
 ### fn Interface
 
@@ -322,7 +323,7 @@ well as to the methods that implement the interface.
 
 The type argument `T` **must** be a struct, and it **must** define two fields:
 
-- `ptr` of type `*anyopaque` or `*const anyopaue`. This pointer refers back to
+- `ptr` of type `*anyopaque` or `*const anyopaque`. This pointer refers back to
   the object implementing the interface, and allows the interface methods to
   access the data contained in that object. In an object oriented language,
   the `ptr` pointer is equivalent to `this` or `self`.
@@ -331,7 +332,7 @@ The type argument `T` **must** be a struct, and it **must** define two fields:
 - `vtable`, a struct containing function pointers that define the interface.
   These functions must accept `*anyopaque` or `*const anyopaque` as their first
   argument. If `ptr` is `*const anyopaque`, all methods must accept
-  `*const anyopaue` as their first argument. This is to preserve the const-ness
+  `*const anyopaque` as their first argument. This is to preserve the const-ness
   of the interface pointer.
 
 The `ptr` argument must be a pointer to a struct that declares methods
@@ -361,3 +362,7 @@ comptime {
   Implements(MyInterface, MyImpl);
 }
 ```
+
+### Additional utilities
+
+The library also exports `fnCast`, a utility function for safely casting between compatible function pointer types. This is primarily useful for advanced use cases involving function pointer manipulation.
