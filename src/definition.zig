@@ -23,7 +23,13 @@ pub fn validateDefinition(comptime InterfaceType: type) ?InterfaceError {
             break :block .{ .missingVtable = {} };
         }
 
-        const VtableType = @TypeOf(@as(InterfaceType, undefined).vtable);
+        const VtablePtrType = @TypeOf(@as(InterfaceType, undefined).vtable);
+        const vtablePtrInfo = @typeInfo(VtablePtrType);
+        if (vtablePtrInfo != .pointer or !vtablePtrInfo.pointer.is_const) {
+            break :block .{ .invalidVtable = .{ .actual = @typeName(VtablePtrType) } };
+        }
+
+        const VtableType = vtablePtrInfo.pointer.child;
         const vtableInfo = @typeInfo(VtableType);
         if (vtableInfo != .@"struct") {
             break :block .{ .invalidVtable = .{ .actual = @tagName(vtableInfo) } };
@@ -104,13 +110,13 @@ test "interface must have vtable" {
     // _ = Interface(Iface, &impl);
 }
 
-test "vtable must be struct" {
+test "vtable must be const pointer to struct" {
     const Iface = struct {
         ptr: *anyopaque,
         vtable: i32,
     };
     const result = validateDefinition(Iface).?;
-    try std.testing.expectEqualDeep(InterfaceError{ .invalidVtable = .{ .actual = "int" } }, result);
+    try std.testing.expectEqualDeep(InterfaceError{ .invalidVtable = .{ .actual = "i32" } }, result);
 
     // const impl = struct {}{};
     // _ = Interface(Iface, &impl);
@@ -119,7 +125,7 @@ test "vtable must be struct" {
 test "vtable must not be empty" {
     const Iface = struct {
         ptr: *anyopaque,
-        vtable: struct {},
+        vtable: *const struct {},
     };
     const result = validateDefinition(Iface).?;
     try std.testing.expectEqualDeep(InterfaceError{ .emptyVtable = {} }, result);
@@ -131,7 +137,7 @@ test "vtable must not be empty" {
 test "vtable method must be function pointer" {
     const Iface = struct {
         ptr: *anyopaque,
-        vtable: struct {
+        vtable: *const struct {
             method: *i32,
         },
     };
@@ -145,7 +151,7 @@ test "vtable method must be function pointer" {
 test "optional vtable method" {
     const Iface = struct {
         ptr: *anyopaque,
-        vtable: struct {
+        vtable: *const struct {
             method: ?*const fn (*anyopaque) void,
         },
     };
@@ -156,7 +162,7 @@ test "optional vtable method" {
 test "interface vtable method must have at least one parameter" {
     const Iface = struct {
         ptr: *anyopaque,
-        vtable: struct {
+        vtable: *const struct {
             method: *const fn () void,
         },
     };
@@ -170,7 +176,7 @@ test "interface vtable method must have at least one parameter" {
 test "valid self pointer" {
     const Iface = struct {
         ptr: *anyopaque,
-        vtable: struct {
+        vtable: *const struct {
             method: *const fn (i32) void,
         },
     };
@@ -184,7 +190,7 @@ test "valid self pointer" {
 test "reject mutable pointer on const interface" {
     const Iface = struct {
         ptr: *const anyopaque,
-        vtable: struct {
+        vtable: *const struct {
             method: *const fn (self: *anyopaque) void,
         },
     };

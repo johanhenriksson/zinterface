@@ -13,10 +13,12 @@ test {
 
 const TestInterface = struct {
     ptr: *anyopaque,
-    vtable: struct {
+    vtable: *const VTable,
+
+    const VTable = struct {
         add: *const fn (self: *const anyopaque, v: i32) i32,
         sub: ?*const fn (self: *anyopaque, v: i32) i32,
-    },
+    };
 
     pub fn add(self: TestInterface, v: i32) i32 {
         return self.vtable.add(self.ptr, v);

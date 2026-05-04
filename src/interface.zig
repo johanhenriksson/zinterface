@@ -45,24 +45,29 @@ pub fn Implements(comptime InterfaceType: type, comptime ImplType: type) void {
 }
 
 fn wrap(comptime InterfaceType: type, comptime ImplType: type, ptr: anytype) InterfaceType {
-    var result: InterfaceType = undefined;
-    result.ptr = ptr;
-
-    const VtableType = @TypeOf(@as(InterfaceType, undefined).vtable);
+    const VtablePtrType = @TypeOf(@as(InterfaceType, undefined).vtable);
+    const VtableType = @typeInfo(VtablePtrType).pointer.child;
     const vtableInfo = @typeInfo(VtableType);
     const vtableFields = vtableInfo.@"struct".fields;
 
-    inline for (vtableFields) |field| {
-        const methodInfo = @typeInfo(field.type);
-        if (!@hasDecl(ImplType, field.name) and methodInfo == .optional) {
-            @field(result.vtable, field.name) = null;
-            continue;
+    const vtable = comptime blk: {
+        var vt: VtableType = undefined;
+        for (vtableFields) |field| {
+            const methodInfo = @typeInfo(field.type);
+            if (!@hasDecl(ImplType, field.name) and methodInfo == .optional) {
+                @field(vt, field.name) = null;
+                continue;
+            }
+            const methodFn = @field(ImplType, field.name);
+            @field(vt, field.name) = @ptrCast(&methodFn);
         }
-        const methodFn = @field(ImplType, field.name);
-        @field(result.vtable, field.name) = @ptrCast(&methodFn);
-    }
+        break :blk vt;
+    };
 
-    return result;
+    return .{
+        .ptr = ptr,
+        .vtable = &vtable,
+    };
 }
 
 pub fn checkConstCompatibility(comptime T: type, ptrInfo: std.builtin.Type) bool {

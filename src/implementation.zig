@@ -4,7 +4,8 @@ const Interface = @import("interface.zig").Interface;
 const InterfaceError = @import("error.zig").InterfaceError;
 
 pub fn validateImplementation(comptime InterfaceType: type, comptime ImplType: type) ?InterfaceError {
-    const VtableType = @TypeOf(@as(InterfaceType, undefined).vtable);
+    const VtablePtrType = @TypeOf(@as(InterfaceType, undefined).vtable);
+    const VtableType = @typeInfo(VtablePtrType).pointer.child;
     const vtableInfo = @typeInfo(VtableType);
     const vtableFields = vtableInfo.@"struct".fields;
 
@@ -122,7 +123,7 @@ pub fn validateMethodSignature(comptime methodName: []const u8, comptime Expecte
 
 const TestInterface = struct {
     ptr: *anyopaque,
-    vtable: struct {
+    vtable: *const struct {
         method: *const fn (*const anyopaque, i32) i32,
     },
 };
