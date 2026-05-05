@@ -4,10 +4,12 @@ const Implements = @import("zinterface").Implements;
 
 pub const Shape = struct {
     ptr: *const anyopaque,
-    vtable: struct {
+    vtable: *const VTable,
+
+    const VTable = struct {
         area: *const fn (self: *const anyopaque) f64,
         perimeter: *const fn (self: *const anyopaque) f64,
-    },
+    };
 
     /// Computes the area of the shape
     pub fn area(self: *const Shape) f64 {
@@ -80,10 +82,10 @@ comptime {
 
 pub fn Shapes(allocator: std.mem.Allocator) !void {
     // the interface allows us to treat different shapes uniformly
-    var shapes = std.ArrayList(Shape).init(allocator);
+    var shapes: std.ArrayList(Shape) = .empty;
 
-    try shapes.append(Circle.init(5.0).shape());
-    try shapes.append(Rectangle.init(4.0, 6.0).shape());
+    try shapes.append(allocator, Circle.init(5.0).shape());
+    try shapes.append(allocator, Rectangle.init(4.0, 6.0).shape());
 
     std.debug.print("Shapes:\n", .{});
     var area: f64 = 0;
